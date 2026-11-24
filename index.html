@@ -20,6 +20,8 @@ button.rec{background:var(--bad)}button.grey{background:#333}
 .big .val{font-size:56px}
 .unit{font-size:14px;color:var(--dim);margin-left:4px}
 .sub{font-size:12px;color:var(--dim);margin-top:4px}
+.zrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.zbtn{padding:6px 12px;font-size:13px;flex:none}
 .bar{height:6px;background:#222;border-radius:3px;margin-top:10px;overflow:hidden}
 .bar div{height:100%;background:var(--blue);width:0;transition:width .2s}
 .hot .val{color:var(--bad)}.hot .bar div{background:var(--bad)}
@@ -53,10 +55,12 @@ const SENS=[
 {pid:'0D',id:'spd',hidden:1,f:b=>b[0],d:0}
 ];
 const DISP=1.995; // cilindrada M47D20 em litros
-let baro=101,baroSrc='assumida',keyOn=null,peak=0,wc,buf='',resolver,active=[],q=Promise.resolve();
+// Pressão atmosférica guardada com o botão "Zerar" (fica entre sessões)
+const savedBaro=(()=>{const v=parseFloat(localStorage.getItem('e46_baro'));return isFinite(v)&&v>50&&v<120?v:null})();
+let baro=savedBaro??101,baroSrc=savedBaro!=null?'zerado':'assumida',keyOn=null,peak=0,wc,buf='',resolver,active=[],q=Promise.resolve();
 let vals={},rec=false,log=[];
 const $=id=>document.getElementById(id),st=t=>$('status').textContent=t;
-function build(){$('grid').innerHTML=active.filter(s=>!s.hidden).map(s=>`<div class="card ${s.big?'big':''}" id="c_${s.id}"><div class="lbl">${s.lbl}</div><div class="val"><span id="v_${s.id}">—</span><span class="unit">${s.unit}</span></div>${s.id=='boost'?'<div class="sub"><span id="rel">Relativa: —</span> · <span id="peak">Pico: —</span></div>':''}<div class="bar"><div id="b_${s.id}"></div></div></div>`).join('')}
+function build(){$('grid').innerHTML=active.filter(s=>!s.hidden).map(s=>`<div class="card ${s.big?'big':''}" id="c_${s.id}"><div class="lbl">${s.lbl}</div><div class="val"><span id="v_${s.id}">—</span><span class="unit">${s.unit}</span></div>${s.id=='boost'?'<div class="sub zrow"><span><span id="rel">Relativa: —</span> · <span id="peak">Pico: —</span><br><span id="baroTxt"></span></span><button class="grey zbtn" onclick="zerar()">Zerar</button></div>':''}<div class="bar"><div id="b_${s.id}"></div></div></div>`).join('')}
 // ---------- DEPURAÇÃO ----------
 const vis=s=>String(s).replace(/\r/g,'\\r').replace(/\n/g,'\\n');
 function dbg(t,err){const d=$('dbg'),el=document.createElement('div');if(err)el.className='e';
@@ -94,7 +98,9 @@ async function connect(){
  // verificação com ignição ligada e motor parado
  const r=parse(await cmd('010C'),'0C'),m=parse(await cmd('010B'),'0B');
  if(r&&m){const rpm=(r[0]*256+r[1])/4;if(rpm<100){keyOn={map:m[0]};if(!bb){baro=m[0];baroSrc='lida com motor parado'}}}
- active=SENS.filter(s=>sup.has(s.pid));build();
+ {const z=localStorage.getItem('e46_baro');if(z!=null&&isFinite(+z)){baro=+z;baroSrc='zerado'}}
+ dbg(`Atmosfera: ${baro} kPa (${baroSrc})`);
+ active=SENS.filter(s=>sup.has(s.pid));build();showBaro();
  st(`Ligado — ${active.filter(s=>!s.hidden).length} sensores visíveis`);loop();
 }
 async function loop(){while(true){for(const s of active){const b=parse(await cmd('01'+s.pid),s.pid);if(!b)continue;const v=s.f(b);vals[s.id]=v;
@@ -103,6 +109,16 @@ async function loop(){while(true){for(const s of active){const b=parse(await cmd
  $('c_'+s.id).classList.toggle('hot',!!s.warn&&v>=s.warn);
  if(s.id=='boost'){$('rel').textContent='Relativa: '+(v-baro/100).toFixed(2)+' bar';if(v>peak){peak=v;$('peak').textContent='Pico: '+v.toFixed(2)+' bar'}}}
  if(rec)log.push({t:Date.now(),...vals,mapk:vals.boost!=null?vals.boost*100:null})}}
+// ---------- ZERAR ----------
+function showBaro(){const e=$('baroTxt');if(e)e.textContent=`Atmosfera: ${baro} kPa (${baroSrc})`}
+function zerar(){
+ if(vals.boost==null){st('Ainda não há leitura do turbo — liga a ficha primeiro');return}
+ const kpa=Math.round(vals.boost*100);
+ if(!confirm(`Zerar com ${kpa} kPa como pressão atmosférica? Faz isto com o motor parado (ignição ligada).`))return;
+ baro=kpa;baroSrc='zerado';localStorage.setItem('e46_baro',String(kpa));
+ $('rel').textContent='Relativa: '+(vals.boost-baro/100).toFixed(2)+' bar';showBaro();
+ dbg(`Zerado: atmosfera = ${kpa} kPa (guardado)`);
+}
 // ---------- ANÁLISE ----------
 const med=a=>{a=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null};
 function grade(v,okLo,okHi,wLo,wHi){return v>=okLo&&v<=okHi?'ok':(v>=wLo&&v<=wHi?'warn':'bad')}
