@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>E46 320d · OBD</title>
+<style>
+:root{--bg:#0b0d10;--card:#14181d;--line:#232a32;--txt:#e9edf1;--mut:#8a96a3;--m1:#2a9ce0;--m2:#1c3f94;--m3:#e2231a;--ok:#2fbf71;--warn:#f0a500;--bad:#e2231a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;padding:env(safe-area-inset-top) 14px calc(24px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+header{padding:18px 2px 12px}
+.stripe{display:flex;height:4px;width:72px;margin-bottom:12px}
+.stripe i{flex:1}.stripe i:nth-child(1){background:var(--m1)}.stripe i:nth-child(2){background:var(--m2)}.stripe i:nth-child(3){background:var(--m3)}
+h1{font-size:22px;font-weight:700;letter-spacing:.5px}
+h1 small{font-weight:400;color:var(--mut);font-size:14px;margin-left:6px}
+#status{margin-top:6px;color:var(--mut);font-size:13px}
+#status.on{color:var(--ok)}
+.bar-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0 16px}
+button{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--txt);font:600 14px/1 inherit;font-family:inherit;padding:14px 8px;border-radius:10px}
+button:active{transform:scale(.98)}
+button:disabled{opacity:.4}
+button.pri{background:var(--m1);border-color:var(--m1);color:#fff}
+button.rec{background:var(--m3);border-color:var(--m3);color:#fff}
+#grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;transition:border-color .2s}
+.c.big{grid-column:1/-1;padding:16px}
+.c.hot{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad) inset}
+.c .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+.c .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;margin:4px 0 8px}
+.c.big .v{font-size:56px;line-height:1.05}
+.c .v span{font-size:14px;font-weight:500;color:var(--mut);margin-left:4px}
+.c.hot .v{color:var(--bad)}
+.track{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.track b{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--m1),var(--m2));transition:width .25s}
+.c.hot .track b{background:var(--bad)}
+.sub{display:flex;justify-content:space-between;color:var(--mut);font-size:13px;margin-top:8px;font-variant-numeric:tabular-nums}
+.empty{grid-column:1/-1;color:var(--mut);text-align:center;padding:28px 10px;border:1px dashed var(--line);border-radius:12px}
+section{margin-top:22px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin-bottom:8px;font-weight:600}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.panel p{color:var(--mut)}
+.meta{color:var(--mut);font-size:13px;margin-bottom:10px}
+.row{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px}
+.row b{display:block}
+.row small{color:var(--mut);font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.dtc{font:700 18px/1.3 ui-monospace,Menlo,monospace;padding:6px 0;border-top:1px solid var(--line)}
+.dtc:first-child{border-top:0}
+.note{color:var(--mut);font-size:12px;margin-top:18px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="stripe"><i></i><i></i><i></i></div>
+  <h1>E46 320d <small>222 cv · M47D20</small></h1>
+  <div id="status">Desligado</div>
+</header>
+
+<div class="bar-btns">
+  <button id="btnCon" class="pri">Ligar</button>
+  <button id="btnRec" disabled>Gravar</button>
+  <button id="btnCsv" disabled>CSV</button>
+</div>
+
+<div id="grid"><div class="empty">Liga a ignição, carrega em <b>Ligar</b> e escolhe a ficha OBDII.</div></div>
+
+<section>
+  <h2>Análise de sensores</h2>
+  <div class="panel" id="analysis"><p>Grava uma volta (idealmente a começar com o motor frio) e pára a gravação para ver a análise.</p></div>
+</section>
+
+<section>
+  <h2>Códigos de falha</h2>
+  <div class="panel">
+    <div id="dtc"><p>—</p></div>
+    <div class="two">
+      <button id="btnDtc" disabled>Ler códigos</button>
+      <button id="btnClr" disabled>Apagar códigos</button>
+    </div>
+  </div>
+</section>
+
+<p class="note">Funciona no Bluefy (iPhone) ou no Chrome (Android). Pressão do turbo em bar absolutos; o OBD padrão só lê até 2,55 bar.</p>
+
+<script>
+const SENS=[
+{pid:'0B',id:'boost',lbl:'Pressão turbo',unit:'bar',big:1,max:2.6,warn:2.5,f:b=>b[0]/100,d:2},
+{pid:'05',id:'ect',lbl:'Água',unit:'°C',max:120,warn:105,f:b=>b[0]-40,d:0},
+{pid:'0F',id:'iat',lbl:'Ar admissão',unit:'°C',max:60,warn:30,f:b=>b[0]-40,d:0},
+{pid:'5C',id:'oil',lbl:'Óleo',unit:'°C',max:150,warn:130,f:b=>b[0]-40,d:0},
+{pid:'46',id:'amb',lbl:'Ambiente',unit:'°C',max:50,f:b=>b[0]-40,d:0},
+{pid:'3C',id:'egt',lbl:'Escape',unit:'°C',max:900,warn:750,f:b=>(b[0]*256+b[1])/10-40,d:0},
+{pid:'10',id:'maf',lbl:'Caudal de ar',unit:'g/s',max:250,f:b=>(b[0]*256+b[1])/100,d:1},
+{pid:'04',id:'load',lbl:'Carga motor',unit:'%',max:100,f:b=>b[0]*100/255,d:0},
+{pid:'42',id:'volt',lbl:'Bateria',unit:'V',max:16,f:b=>(b[0]*256+b[1])/1000,d:1},
+{pid:'0C',id:'rpm',hidden:1,f:b=>(b[0]*256+b[1])/4,d:0},
+{pid:'0D',id:'spd',hidden:1,f:b=>b[0],d:0}
+];
+const DISP=1.995; // cilindrada M47D20 em litros
+let baro=101,baroSrc='assumida',keyOn=null,peak=0,wc,buf='',resolver,active=[],q=Promise.resolve();
+let vals={},rec=false,log=[],running=false,writeFn;
+const $=id=>document.getElementById(id);
+const st=(t,on)=>{$('status').textContent=t;$('status').classList.toggle('on',!!on)};
+
+function build(){
+ const vis=active.filter(s=>!s.hidden);
+ if(!vis.length){$('grid').innerHTML='<div class="empty">O carro não respondeu a nenhum sensor. Confirma que a ignição está ligada.</div>';return}
+ $('grid').innerHTML=vis.map(s=>`<div class="c${s.big?' big':''}" id="c_${s.id}">
+  <div class="l">${s.lbl}${s.id=='boost'?' · absoluta':''}</div>
+  <div class="v"><em id="v_${s.id}" style="font-style:normal">—</em><span>${s.unit}</span></div>
+  <div class="track"><b id="b_${s.id}"></b></div>
+  ${s.id=='boost'?'<div class="sub"><span id="rel">Relativa: —</span><span id="peak">Pico: —</span></div>':''}
+ </div>`).join('');
+}
+
+function raw(c,t){return new Promise(r=>{
+ const to=setTimeout(()=>{resolver=null;buf='';r('')},t);
+ resolver=x=>{clearTimeout(to);resolver=null;r(x)};
+ writeFn(new TextEncoder().encode(c+'\r')).catch(()=>{});
+})}
+function cmd(c,t=2000){const p=q.then(()=>raw(c,t));q=p.catch(()=>{});return p}
+function parse(r,pid){const h=r.replace(/[\s>]/g,'').toUpperCase(),i=h.indexOf('41'+pid);if(i<0)return null;return(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16))}
+
+async function supported(){const s=new Set();for(const base of['00','20','40']){const b=parse(await cmd('01'+base,6000),base);if(!b||b.length<4)break;
+ for(let i=0;i<32;i++)if(b[i>>3]&(128>>(i&7)))s.add((parseInt(base,16)+i+1).toString(16).toUpperCase().padStart(2,'0'));if(!(b[3]&1))break}return s}
+
+async function connect(){
+ if(!navigator.bluetooth){st('Abre isto no Bluefy (iPhone) ou Chrome (Android)');return}
+ const sv=['0000fff0-0000-1000-8000-00805f9b34fb','0000ffe0-0000-1000-8000-00805f9b34fb','000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+ try{
+  st('A procurar ficha…');
+  const dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:sv});
+  dev.addEventListener('gattserverdisconnected',()=>{running=false;st('Ficha desligada');setBtns(false)});
+  const srv=await dev.gatt.connect();let nc;wc=null;
+  for(const s of await srv.getPrimaryServices())for(const c of await s.getCharacteristics()){
+   if(c.properties.notify&&!nc)nc=c;if((c.properties.write||c.properties.writeWithoutResponse)&&!wc)wc=c}
+  if(!nc||!wc){st('Ficha não compatível');return}
+  writeFn=(!wc.properties.write&&wc.writeValueWithoutResponse)?v=>wc.writeValueWithoutResponse(v):v=>wc.writeValue(v);
+  await nc.startNotifications();
+  nc.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);if(buf.includes('>')){const r=buf;buf='';resolver&&resolver(r)}});
+  st('A iniciar ELM327…');
+  for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP3'])await cmd(c,c=='ATZ'?3000:1500);
+  st('A ligar ao carro (ISO 9141-2)…');
+  let sup=await supported();
+  if(!sup.size){st('A procurar protocolo…');await cmd('ATSP0');sup=await supported()}
+  if(!sup.size){st('O carro não respondeu. Ignição ligada?');return}
+  const bb=parse(await cmd('0133'),'33');if(bb){baro=bb[0];baroSrc='sensor'}
+  const r=parse(await cmd('010C'),'0C'),m=parse(await cmd('010B'),'0B');
+  if(r&&m){const rpm=(r[0]*256+r[1])/4;if(rpm<100){keyOn={map:m[0]};if(!bb){baro=m[0];baroSrc='lida com motor parado'}}}
+  active=SENS.filter(s=>sup.has(s.pid));build();
+  st(`Ligado · ${active.filter(s=>!s.hidden).length} sensores`,true);
+  setBtns(true);running=true;loop();
+ }catch(e){st(e&&e.name=='NotFoundError'?'Nenhuma ficha escolhida':'Erro: '+(e&&e.message||e))}
+}
+function setBtns(on){['btnRec','btnCsv','btnDtc','btnClr'].forEach(id=>$(id).disabled=!on);$('btnCon').disabled=on;if(!on)$('btnCsv').disabled=!log.length}
+
+async function loop(){while(running){for(const s of active){if(!running)break;const b=parse(await cmd('01'+s.pid),s.pid);if(!b)continue;const v=s.f(b);vals[s.id]=v;
+ if(s.hidden)continue;
+ $('v_'+s.id).textContent=(s.id=='boost'&&b[0]>=255?'≥':'')+v.toFixed(s.d);
+ $('b_'+s.id).style.width=Math.max(0,Math.min(100,v/s.max*100))+'%';
+ $('c_'+s.id).classList.toggle('hot',!!s.warn&&v>=s.warn);
+ if(s.id=='boost'){$('rel').textContent='Relativa: '+(v-baro/100).toFixed(2)+' bar';
+  if(v>peak){peak=v;$('peak').textContent='Pico: '+v.toFixed(2)+' bar'}}}
+ if(rec)log.push({t:Date.now(),...vals,mapk:vals.boost!=null?vals.boost*100:null})}}
+
+const med=a=>{a=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null};
+function grade(v,okLo,okHi,wLo,wHi){return v>=okLo&&v<=okHi?'ok':(v>=wLo&&v<=wHi?'warn':'bad')}
+
+function analyze(){
+ const R=[],add=(n,s,m)=>R.push({n,s,m});
+ if(log.length<20){$('analysis').innerHTML='<p>Poucos dados — grava pelo menos uns minutos.</p>';return}
+ const first=log.slice(0,10),dur=(log[log.length-1].t-log[0].t)/60000;
+ if(keyOn){const d=Math.abs(keyOn.map-(baroSrc=='sensor'?baro:101));
+  add('Sensor de pressão (MAP)',grade(d,0,4,0,8),`Motor parado: ${keyOn.map} kPa vs atmosfera ${baroSrc=='sensor'?baro:'~101'} kPa (dif. ${d.toFixed(0)} kPa)`)}
+ else add('Sensor de pressão (MAP)','na','Liga a app com a ignição ligada e o motor parado para testar.');
+ const e0=med(first.map(x=>x.ect)),i0=med(first.map(x=>x.iat)),a0=med(first.map(x=>x.amb));
+ if(e0!=null&&e0<35){const ref=a0!=null?a0:i0,de=Math.abs(e0-ref),di=i0!=null?Math.abs(i0-ref):0;
+  add('Temp. água (arranque a frio)',grade(de,0,6,0,12),`Água ${e0.toFixed(0)}°C vs referência ${ref.toFixed(0)}°C`);
+  if(i0!=null&&a0!=null)add('Temp. ar admissão (arranque a frio)',grade(di,0,6,0,12),`Admissão ${i0.toFixed(0)}°C vs ambiente ${a0.toFixed(0)}°C`)}
+ else add('Temperaturas em frio','na','Motor já estava quente — começa a gravar com o motor frio para testar.');
+ const eMax=Math.max(...log.map(x=>x.ect??-99));
+ if(dur>=10&&eMax>-99)add('Termóstato / sensor água',eMax>=80&&eMax<=100?'ok':(eMax>=72&&eMax<=105?'warn':'bad'),`Máx. ${eMax.toFixed(0)}°C em ${dur.toFixed(0)} min (normal 85–95°C)`);
+ else add('Termóstato / sensor água','na','Precisa de pelo menos 10 minutos de gravação.');
+ const ve=log.filter(x=>x.rpm>1500&&x.maf>0&&x.mapk>0&&x.iat!=null).map(x=>{
+  const theo=(x.mapk*1000*(DISP/1000)*(x.rpm/120))/(287*(x.iat+273))*1000;return x.maf/theo});
+ if(ve.length>=15){const v=med(ve);
+  add('Medidor de caudal (MAF)',grade(v,0.75,1.05,0.65,1.15),`Rendimento volumétrico ${(v*100).toFixed(0)}% (esperado 75–105%) em ${ve.length} amostras acima de 1500 rpm`)}
+ else add('Medidor de caudal (MAF)','na','Precisa de mais tempo acima de 1500 rpm.');
+ const bMax=Math.max(...log.map(x=>x.boost??-9));
+ if(bMax>0)add('Pressão turbo (pico)',bMax<=2.5&&bMax>=1.9?'ok':(bMax<=2.55&&bMax>=1.7?'warn':'bad'),`Pico ${bMax.toFixed(2)} bar absolutos (esperado ~2,0–2,4 com o teu setup)${bMax>=2.55?' · chegou ao limite de leitura do OBD':''}`);
+ const vv=med(log.filter(x=>x.rpm>600).map(x=>x.volt));
+ if(vv!=null)add('Bateria / alternador',grade(vv,13.6,14.8,13.2,15.0),`${vv.toFixed(2)} V com motor a trabalhar (normal 13,8–14,6 V)`);
+ const col={ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)',na:'#555'},txt={ok:'OK',warn:'Vigiar',bad:'Avariado?',na:'Sem dados'};
+ $('analysis').innerHTML=`<div class="meta">${log.length} amostras · ${dur.toFixed(1)} min</div>`+R.map(r=>`<div class="row"><i class="dot" style="background:${col[r.s]}"></i><div><b>${r.n} — ${txt[r.s]}</b><small>${r.m}</small></div></div>`).join('');
+}
+
+function exportCsv(){if(!log.length)return;const k=Object.keys(log[log.length-1]);
+ const csv=[k.join(',')].concat(log.map(r=>k.map(x=>r[x]??'').join(','))).join('\n');
+ const f=new File([csv],'e46_volta.csv',{type:'text/csv'});
+ if(navigator.canShare&&navigator.canShare({files:[f]}))navigator.share({files:[f]}).catch(()=>{});
+ else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}}
+
+function decodeDtc(h){const n=parseInt(h,16);return'PCBU'[n>>14]+((n>>12)&3)+h.slice(1).toUpperCase()}
+async function readDtc(){
+ $('dtc').innerHTML='<p>A ler…</p>';
+ const r=await cmd('03',6000),codes=[];
+ for(const line of r.split(/[\r\n]+/)){const h=line.replace(/[\s>]/g,'').toUpperCase();if(!h.startsWith('43'))continue;
+  for(const x of h.slice(2).match(/.{4}/g)||[])if(x!='0000'&&!codes.includes(x))codes.push(x)}
+ if(/NO ?DATA/i.test(r)||(!codes.length&&r.replace(/\s/g,'').toUpperCase().includes('43')))$('dtc').innerHTML='<p style="color:var(--ok)">Sem códigos de falha guardados.</p>';
+ else if(!codes.length)$('dtc').innerHTML='<p>O carro não respondeu. Tenta outra vez.</p>';
+ else $('dtc').innerHTML=codes.map(c=>`<div class="dtc">${decodeDtc(c)}</div>`).join('');
+}
+async function clearDtc(){
+ if(!confirm('Apagar os códigos de falha? Faz isto com a ignição ligada e o motor parado. A luz do motor apaga, mas volta se a avaria continuar.'))return;
+ const r=await cmd('04',6000);
+ $('dtc').innerHTML=r.replace(/\s/g,'').toUpperCase().includes('44')?'<p style="color:var(--ok)">Códigos apagados.</p>':'<p>Não confirmou. Desliga o motor (ignição ligada) e tenta outra vez.</p>';
+}
+
+$('btnCon').onclick=connect;
+$('btnRec').onclick=()=>{rec=!rec;const b=$('btnRec');
+ if(rec){log=[];b.textContent='Parar';b.classList.add('rec');$('analysis').innerHTML='<p>A gravar…</p>'}
+ else{b.textContent='Gravar';b.classList.remove('rec');analyze();$('btnCsv').disabled=!log.length}};
+$('btnCsv').onclick=exportCsv;
+$('btnDtc').onclick=readDtc;
+$('btnClr').onclick=clearDtc;
+</script>
+</body>
+</html>
