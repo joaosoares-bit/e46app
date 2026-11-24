@@ -57,7 +57,7 @@ function build(){$('grid').innerHTML=active.filter(s=>!s.hidden).map(s=>`<div cl
 function raw(c,t){return new Promise(r=>{const to=setTimeout(()=>{resolver=null;buf='';r('')},t);resolver=x=>{clearTimeout(to);resolver=null;r(x)};wc.writeValue(new TextEncoder().encode(c+'\r'))})}
 function cmd(c,t=2000){const p=q.then(()=>raw(c,t));q=p.catch(()=>{});return p}
 function parse(r,pid){const h=r.replace(/[\s>]/g,'').toUpperCase(),i=h.indexOf('41'+pid);if(i<0)return null;return(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16))}
-async function supported(){const s=new Set();for(const base of['00','20','40']){const b=parse(await cmd('01'+base,5000),base);if(!b||b.length<4)break;
+async function supported(){const s=new Set();for(const base of['00','20','40']){const b=parse(await cmd('01'+base,10000),base);if(!b||b.length<4)break;
  for(let i=0;i<32;i++)if(b[i>>3]&(128>>(i&7)))s.add((parseInt(base,16)+i+1).toString(16).toUpperCase().padStart(2,'0'));if(!(b[3]&1))break}return s}
 async function connect(){
  if(!navigator.bluetooth){st('Abre isto no Bluefy (iPhone) ou Chrome (Android)');return}
@@ -71,7 +71,7 @@ async function connect(){
  await nc.startNotifications();
  nc.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);if(buf.includes('>')){const r=buf;buf='';resolver&&resolver(r)}});
  st('A iniciar ELM327…');
- for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP0'])await cmd(c,c=='ATZ'?3000:1500);
+ for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP3'])await cmd(c,c=='ATZ'?3000:1500);
  st('A ligar ao carro…');
  const sup=await supported();
  const bb=parse(await cmd('0133'),'33');if(bb){baro=bb[0];baroSrc='sensor'}
