@@ -10,6 +10,8 @@ h1{font-size:20px;font-weight:300;letter-spacing:2px}
 button{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:10px 14px;font-size:15px}
 button.rec{background:var(--bad)}button.grey{background:#333}
 #status{color:var(--dim);font-size:13px;margin-bottom:12px}
+#dbg{font:11px/1.35 ui-monospace,Menlo,monospace;color:#8a8f96;max-height:200px;overflow-y:auto;background:#101317;border:1px solid #222;border-radius:6px;padding:6px 8px;margin:-4px 0 12px;white-space:pre-wrap;word-break:break-all}
+#dbg .e{color:#e7222e}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .card{background:var(--card);border-radius:10px;padding:14px;border-top:2px solid var(--blue)}
 .big{grid-column:span 2}
@@ -29,6 +31,7 @@ button.rec{background:var(--bad)}button.grey{background:#333}
 <header><h1>E46 320d</h1><div style="display:flex;gap:8px"><button id="recBtn" class="grey">Gravar</button><button id="btn">Ligar</button></div></header>
 <div class="stripe"></div>
 <div id="status">Desligado</div>
+<div id="dbg"></div>
 <div class="grid" id="grid"></div>
 <div class="card big sec"><div class="lbl">Análise de sensores</div><div id="analysis" style="margin-top:6px;color:var(--dim);font-size:14px">Grava uma volta (idealmente a começar com o motor frio) e pára a gravação para ver a análise.</div>
 <div style="margin-top:10px"><button id="csvBtn" class="grey">Exportar CSV</button></div></div>
@@ -54,7 +57,17 @@ let baro=101,baroSrc='assumida',keyOn=null,peak=0,wc,buf='',resolver,active=[],q
 let vals={},rec=false,log=[];
 const $=id=>document.getElementById(id),st=t=>$('status').textContent=t;
 function build(){$('grid').innerHTML=active.filter(s=>!s.hidden).map(s=>`<div class="card ${s.big?'big':''}" id="c_${s.id}"><div class="lbl">${s.lbl}</div><div class="val"><span id="v_${s.id}">—</span><span class="unit">${s.unit}</span></div>${s.id=='boost'?'<div class="sub"><span id="rel">Relativa: —</span> · <span id="peak">Pico: —</span></div>':''}<div class="bar"><div id="b_${s.id}"></div></div></div>`).join('')}
-function raw(c,t){return new Promise(r=>{const to=setTimeout(()=>{resolver=null;buf='';r('')},t);resolver=x=>{clearTimeout(to);resolver=null;r(x)};wc.writeValue(new TextEncoder().encode(c+'\r'))})}
+// ---------- DEPURAÇÃO ----------
+const vis=s=>String(s).replace(/\r/g,'\\r').replace(/\n/g,'\\n');
+function dbg(t,err){const d=$('dbg'),el=document.createElement('div');if(err)el.className='e';
+ const now=new Date();el.textContent=now.toTimeString().slice(0,8)+'.'+String(now.getMilliseconds()).padStart(3,'0')+' '+t;
+ const atBottom=d.scrollTop+d.clientHeight>=d.scrollHeight-4;d.appendChild(el);
+ while(d.childNodes.length>400)d.removeChild(d.firstChild);if(atBottom)d.scrollTop=d.scrollHeight}
+function raw(c,t){return new Promise(r=>{const t0=performance.now();
+ const to=setTimeout(()=>{const part=buf;resolver=null;buf='';dbg(`> ${c} | TIMEOUT${part?' (parcial: "'+vis(part)+'")':''} | ${Math.round(performance.now()-t0)} ms`,1);r('')},t);
+ resolver=x=>{clearTimeout(to);resolver=null;dbg(`> ${c} | "${vis(x)}" | ${Math.round(performance.now()-t0)} ms`);r(x)};
+ try{const p=wc.writeValue(new TextEncoder().encode(c+'\r'));if(p&&p.catch)p.catch(e=>dbg(`writeValue ERRO (${c}): ${e.name}: ${e.message}`,1))}
+ catch(e){dbg(`writeValue ERRO (${c}): ${e.name}: ${e.message}`,1)}})}
 function cmd(c,t=2000){const p=q.then(()=>raw(c,t));q=p.catch(()=>{});return p}
 function parse(r,pid){const h=r.replace(/[\s>]/g,'').toUpperCase(),i=h.indexOf('41'+pid);if(i<0)return null;return(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16))}
 async function supported(){const s=new Set();for(const base of['00','20','40']){const b=parse(await cmd('01'+base,10000),base);if(!b||b.length<4)break;
@@ -67,6 +80,9 @@ async function connect(){
  const srv=await dev.gatt.connect();let nc;
  for(const s of await srv.getPrimaryServices())for(const c of await s.getCharacteristics()){
   if(c.properties.notify&&!nc)nc=c;if((c.properties.write||c.properties.writeWithoutResponse)&&!wc)wc=c}
+ dbg(`Ficha: ${dev.name||'(sem nome)'} · id ${dev.id}`);
+ if(nc)dbg(`NOTIFY · serviço ${nc.service.uuid} · característica ${nc.uuid}`);else dbg('NOTIFY · nenhuma característica encontrada',1);
+ if(wc)dbg(`WRITE · serviço ${wc.service.uuid} · característica ${wc.uuid} · ${wc.properties.write?'write':''}${wc.properties.writeWithoutResponse?' writeWithoutResponse':''}`);else dbg('WRITE · nenhuma característica encontrada',1);
  if(!nc||!wc){st('Ficha não compatível');return}
  await nc.startNotifications();
  nc.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);if(buf.includes('>')){const r=buf;buf='';resolver&&resolver(r)}});
@@ -134,7 +150,7 @@ async function readDtc(){if(!wc)return;const r=await cmd('03',5000),L='PCBU',out
  for(const line of r.split(/[\r\n]+/)){const h=line.replace(/[\s>]/g,'').toUpperCase();if(!h.startsWith('43'))continue;seen=true;
   const d=h.slice(2);for(let k=0;k+4<=d.length;k+=4){const c=d.substr(k,4);if(c=='0000')continue;const n=parseInt(c[0],16),code=L[n>>2]+(n&3)+c.slice(1);if(!out.includes(code))out.push(code)}}
  $('dtcList').textContent=out.length?out.join('  '):(seen||/NODATA/.test(r.replace(/\s/g,'').toUpperCase())?'Sem códigos':'Sem resposta — tenta outra vez')}
-$('btn').onclick=()=>connect().catch(e=>st('Erro: '+e.message));
+$('btn').onclick=()=>connect().catch(e=>{st('Erro: '+e.message);dbg(`ERRO na ligação: ${e.name}: ${e.message}`,1)});
 $('recBtn').onclick=()=>{rec=!rec;const b=$('recBtn');
  if(rec){log=[];b.textContent='Parar';b.className='rec';$('analysis').textContent='A gravar…'}
  else{b.textContent='Gravar';b.className='grey';analyze()}};
